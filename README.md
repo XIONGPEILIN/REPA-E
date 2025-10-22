@@ -19,7 +19,7 @@
   <a href="https://huggingface.co/REPA-E">🤗 Models</a> &ensp;
   <a href="https://arxiv.org/abs/2504.10483">📃 Paper</a> &ensp;
   <br><br>
-  <a href="https://paperswithcode.com/sota/image-generation-on-imagenet-256x256?p=repa-e-unlocking-vae-for-end-to-end-tuning-of"><img src="https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/repa-e-unlocking-vae-for-end-to-end-tuning-of/image-generation-on-imagenet-256x256" alt="PWC"></a>
+  <!-- <a href="https://paperswithcode.com/sota/image-generation-on-imagenet-256x256?p=repa-e-unlocking-vae-for-end-to-end-tuning-of"><img src="https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/repa-e-unlocking-vae-for-end-to-end-tuning-of/image-generation-on-imagenet-256x256" alt="PWC"></a> -->
 </p>
 
 ![](assets/vis-examples.jpg)
@@ -29,10 +29,96 @@ We address a fundamental question: ***Can latent diffusion models and their VAE 
 
 ![](assets/overview.jpg)
 
-**REPA-E** significantly accelerates training — achieving over **17×** speedup compared to REPA and **45×** over the vanilla training recipe. Interestingly, end-to-end tuning also improves the VAE itself: the resulting **E2E-VAE** provides better latent structure and serves as a **drop-in replacement** for existing VAEs (e.g., SD-VAE), improving convergence and generation quality across diverse LDM architectures. Our method achieves state-of-the-art FID scores on ImageNet 256×256: **1.26** with CFG and **1.83** without CFG.
+**REPA-E** significantly accelerates training — achieving over **17×** speedup compared to REPA and **45×** over the vanilla training recipe. Interestingly, end-to-end tuning also improves the VAE itself: the resulting **E2E-VAE** provides better latent structure and serves as a **drop-in replacement** for existing VAEs (e.g., SD-VAE), improving convergence and generation quality across diverse LDM architectures. Our method achieves state-of-the-art FID scores on ImageNet 256×256: **1.12** with CFG and **1.69** without CFG.
 
-## News and Updates
-**[2025-04-15]** Initial Release with pre-trained models and codebase.
+<section id="news">
+    <h2>News</h2>
+    <div class="row">
+        <div> 📅 <b>[Oct 2025]</b> 🚨 Released <a href="https://end2end-diffusion.github.io/repa-e-t2i/">REPA-E for T2I</a> 🚨 — a family of End-to-End Tuned VAEs:
+            <ul style="margin-top: 8px; margin-bottom: 4px;">
+                <li><b>Family of end-to-end tuned VAEs</b>:
+                    <ul style="margin-top: 4px; margin-bottom: 4px;">
+                        <li>T2I VAEs: <a href="https://huggingface.co/REPA-E/e2e-flux-vae">FLUX-VAE</a>, <a href="https://huggingface.co/REPA-E/e2e-sd3.5-vae">SD-3.5-VAE</a>, <a href="https://huggingface.co/REPA-E/e2e-qwenimage-vae">Qwen-Image-VAE</a></li>
+                        <li>ImageNet VAEs: <a href="https://huggingface.co/REPA-E/e2e-sdvae-hf">SD-VAE</a>, <a href="https://huggingface.co/REPA-E/e2e-invae-hf">IN-VAE</a>, <a href="https://huggingface.co/REPA-E/e2e-vavae-hf">VA-VAE</a></li>
+                    </ul>
+                </li>
+                <li><b>End-to-end training generalizes to T2I</b>: E2E-VAEs achieve better T2I generation quality across multiple resolutions (256×256, 512×512) compared to their standard VAE counterparts, without requiring additional representation alignment losses</li>
+                <li><b>SOTA results on ImageNet 256×256</b>: FID <b>1.12</b> with CFG and <b>1.69</b> without CFG. The generated npz files can be found <a href="https://huggingface.co/datasets/REPA-E/repa-e-artifacts/tree/main/labelsampling-equal-run1">here</a></li>
+                <!-- <li><b>Improved latent space structure</b> with enhanced semantic spatial details compared to standard VAEs</li> -->
+                <li>All models available as <b>Hugging Face-compatible AutoencoderKL</b> checkpoints — load directly with <code>diffusers</code> API, no custom wrapper needed</li>
+            </ul>
+        </div>
+    </div>
+    <div class="row">
+        <div> 📅 <b>[Jun 2025]</b> REPA-E accepted at ICCV 2025!</div>
+    </div>
+    <div class="row">
+        <div> 📅 <b>[Apr 2025]</b> Paper, code, and pretrained models available on <a href="https://github.com/End2End-Diffusion/REPA-E">GitHub</a> and <a href="https://huggingface.co/REPA-E">Hugging Face</a>.</div>
+    </div>
+    </section>
+
+<!-- ## Updates -->
+<h2 align="left" style="color:#ff000d">🆕 Model Releases: Hugging Face Compatible VAEs</h2>
+
+We are excited to release the family of End-to-End tuned VAEs as Hugging Face AutoencoderKL compatible checkpoints, ready to use with diffusers out of the box. This release includes both our text-to-image VAEs and ImageNet-trained VAEs.
+
+> **Note:** Please refer to our [T2I codebase](https://github.com/End2End-Diffusion/fuse-dit) training codebase to reproduce the text-to-image experiments with end-to-end VAEs.
+
+| Model | Hugging Face |
+|---|---|
+| **E2E-FLUX-VAE** | 🤗 [REPA-E/e2e-flux-vae](https://huggingface.co/REPA-E/e2e-flux-vae) |
+| **E2E-SD-3.5-VAE** | 🤗 [REPA-E/e2e-sd3.5-vae](https://huggingface.co/REPA-E/e2e-sd3.5-vae) |
+| **E2E-Qwen-Image-VAE** | 🤗 [REPA-E/e2e-qwenimage-vae](https://huggingface.co/REPA-E/e2e-qwenimage-vae) |
+| **E2E-VAVAE-HF** | 🤗 [REPA-E/e2e-vavae-hf](https://huggingface.co/REPA-E/e2e-vavae-hf) |
+| **E2E-SDVAE-HF** | 🤗 [REPA-E/e2e-sdvae-hf](https://huggingface.co/REPA-E/e2e-sdvae-hf) |
+| **E2E-INVAE-HF** | 🤗 [REPA-E/e2e-invae-hf](https://huggingface.co/REPA-E/e2e-invae-hf) |
+
+### ⚡️ Quickstart 
+```python
+from diffusers import AutoencoderKL
+
+# Load end-to-end tuned VAE (ImageNet VAE example)
+vae = AutoencoderKL.from_pretrained("REPA-E/e2e-vavae-hf").to("cuda")
+
+# Or load a text-to-image VAE
+vae = AutoencoderKL.from_pretrained("REPA-E/e2e-flux-vae").to("cuda")
+
+# Use in your pipeline with vae.encode(...) / vae.decode(...)
+```
+
+### 🧩 Complete Example
+Full workflow for encoding and decoding images:
+```python
+from io import BytesIO
+import requests
+from diffusers import AutoencoderKLQwenImage
+import numpy as np
+import torch
+from PIL import Image
+
+response = requests.get("https://raw.githubusercontent.com/End2End-Diffusion/fuse-dit/main/assets/example.png")
+device = "cuda"
+
+image = torch.from_numpy(
+    np.array(
+        Image.open(BytesIO(response.content))
+    )
+).permute(2, 0, 1).unsqueeze(0).to(torch.float32) / 127.5 - 1
+image = image.to(device)
+
+vae = AutoencoderKLQwenImage.from_pretrained("REPA-E/e2e-qwenimage-vae").to(device)
+
+# Add frame dimension (required for QwenImage VAE)
+image_ = image.unsqueeze(2)
+
+with torch.no_grad():
+    latents = vae.encode(image_).latent_dist.sample()
+    reconstructed = vae.decode(latents).sample
+
+# Remove frame dimension
+latents = latents.squeeze(2)
+reconstructed = reconstructed.squeeze(2)
+```
 
 ## Getting Started
 ### 1. Environment Setup
@@ -190,7 +276,7 @@ torchrun --nnodes=1 --nproc_per_node=8 generate.py \
     --guidance-high 1.0 \
     --guidance-low 0.0 \
     --exp-path pretrained/sit-ldm-e2e-vavae \
-    --train-steps 4000000
+    --train-steps 4000000 \
 ```
 
 <details>
@@ -205,6 +291,7 @@ You can adjust the following options for sampling:
 - `--guidance-low`: Lower guidance interval (float in [0, 1], must be < `--guidance-high`)
 - `--exp-path`: Path to the experiment directory
 - `--train-steps`: Training step of the checkpoint to evaluate
+- `--label-sampling`: Class label sampling strategy, `[equal, random]` (default: `equal`)
 
 </details>
 
@@ -237,16 +324,18 @@ Tables below report generation performance using gFID on 50k samples, with and w
 | Tokenizer | Generation Model | Method | Epochs | gFID-50k ↓ | gFID-50k (CFG) ↓ |
 |:------|:---------|:----------------|:-----:|:----:|:---:|
 | SD-VAE | SiT-XL/2 | SiT | 1400 | 8.30 | 2.06 |
-| SD-VAE | SiT-XL/2 | REPA | 800 | 5.90 | 1.42 |
-| VA-VAE | LightningDiT-XL/1 | LightningDiT | 800 | 2.17 | 1.36 |
-| [**E2E-VAVAE (Ours)**](https://huggingface.co/REPA-E/e2e-vavae) | [**SiT-XL/1**](https://huggingface.co/REPA-E/sit-ldm-e2e-vavae) | REPA | 800 | **1.83** | **1.26**<sup>†</sup> |
+| SD-VAE | SiT-XL/2 | REPA | 800 | 5.84 | 1.28 |
+| VA-VAE | LightningDiT-XL/1 | LightningDiT | 800 | 2.05 | 1.25 |
+| [**E2E-VAVAE (Ours)**](https://huggingface.co/REPA-E/e2e-vavae) | [**SiT-XL/1**](https://huggingface.co/REPA-E/sit-ldm-e2e-vavae) | REPA | 800 | **1.69** | **1.12**<sup>†</sup> |
 
-In this setup, the VAE is kept frozen, and only the generator is trained. Models using our E2E-VAE (fine-tuned via REPA-E) consistently outperform baselines like SD-VAE and VA-VAE, achieving state-of-the-art performance when incorporating the REPA alignment objective.
+In this setup, the VAE is kept frozen and only the generator is trained. Models using our E2E-VAE (fine-tuned via REPA-E) consistently outperform baselines such as SD-VAE and VA-VAE, achieving state-of-the-art performance when incorporating the REPA alignment objective.
+
+**Note**: The results for the last three rows (REPA, LightningDiT, and E2E-VAE) are obtained using the class-balanced sampling protocol (50 images per class).
 
 <details>
     <summary>Click to expand for CFG parameters</summary>
 <ul>
-    <li><strong>†</strong>: <code>--cfg-scale=2.5</code>, <code>--guidance-low=0.0</code>, <code>--guidance-high=0.75</code></li>
+    <li><strong>†</strong>: <code>--cfg-scale=2.4</code>, <code>--guidance-low=0.0</code>, <code>--guidance-high=0.73</code></li>
 </ul>
 </details>
 
