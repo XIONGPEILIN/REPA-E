@@ -359,4 +359,10 @@ If you find our work useful, please consider citing:
   year={2025},
   journal={arXiv preprint arXiv:2504.10483},
 }
+@misc{repaet2i2025,
+    title={Family of End-to-End Tuned VAEs for Supercharging T2I Diffusion Transformers},
+    author={Leng, Xingjian and Singh, Jaskirat and Murdock, Ryan and Smith, Ethan and Li, Rebecca and Hou, Yunzhong and Xing, Zhenchang and Xie, Saining and Zheng, Liang},
+    howpublished={\url{https://end2end-diffusion.github.io/repa-e-t2i/}},
+    year={2025}
+}
 ```
