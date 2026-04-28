@@ -7,9 +7,9 @@ import math
 from pathlib import Path
 from collections import OrderedDict
 
-from accelerate import Accelerator
+from accelerate import Accelerator, InitProcessGroupKwargs
 from accelerate.logging import get_logger
-from accelerate.utils import ProjectConfiguration, set_seed
+from accelerate.utils import ProjectConfiguration, set_seed, DistributedDataParallelKwargs
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 import torch
 from torch.utils.data import DataLoader
@@ -19,7 +19,7 @@ from tqdm.auto import tqdm
 from omegaconf import OmegaConf
 import wandb
 
-from dataset import CustomINH5Dataset
+from dataset import CustomINH5Dataset, ParquetDataset, HFImageNetDataset, ParquetDataset, HFImageNetDataset
 from loss.losses import ReconstructionLoss_Single_Stage
 from models.autoencoder import vae_models
 from models.sit import SiT_models
@@ -134,6 +134,7 @@ def main(args):
         mixed_precision=args.mixed_precision,
         log_with=args.report_to,
         project_config=accelerator_project_config,
+        kwargs_handlers=[InitProcessGroupKwargs(), DistributedDataParallelKwargs(find_unused_parameters=True)],
     )
 
     # set up the logger and checkpoint dirs
@@ -185,6 +186,7 @@ def main(args):
         z_dims=z_dims,
         encoder_depth=args.encoder_depth,
         bn_momentum=args.bn_momentum,
+        prior_family=args.prior_family,
         **block_kwargs
     )
 
@@ -246,7 +248,13 @@ def main(args):
     )
 
     # Setup data
-    train_dataset = CustomINH5Dataset(args.data_dir)
+    if args.use_hf_imagenet:
+        train_dataset = HFImageNetDataset()
+    elif args.parquet_data_path:
+        train_dataset = ParquetDataset(args.parquet_data_path)
+    else:
+        train_dataset = CustomINH5Dataset(args.data_dir)
+    
     local_batch_size = int(args.batch_size // accelerator.num_processes)
     train_dataloader = DataLoader(
         train_dataset,
@@ -286,6 +294,8 @@ def main(args):
         ema.load_state_dict(ckpt['ema'])
         vae.load_state_dict(ckpt['vae'])
         vae_loss_fn.discriminator.load_state_dict(ckpt['discriminator'])
+        if 'vae_loss_fn' in ckpt:
+            vae_loss_fn.load_state_dict(ckpt['vae_loss_fn'], strict=False)
         optimizer.load_state_dict(ckpt['opt']),
         optimizer_vae.load_state_dict(ckpt['opt_vae'])
         optimizer_loss_fn.load_state_dict(ckpt['opt_disc'])
@@ -364,6 +374,9 @@ def main(args):
                     prediction=args.prediction,
                     weighting=args.weighting,
                 )
+                if args.prior_family == "student_t":
+                    unwrapped_loss_fn = accelerator.unwrap_model(vae_loss_fn)
+                    loss_kwargs["student_t_nu"] = torch.nn.functional.softplus(unwrapped_loss_fn.nu_raw) + 1e-4
                 # Record the time_input and noises for the VAE alignment, so that we avoid sampling again
                 time_input = None
                 noises = None
@@ -373,7 +386,7 @@ def main(args):
                 # Avoid BN stats to be updated by the VAE
                 model.eval()
 
-                vae_loss, vae_loss_dict = vae_loss_fn(processed_image, recon_image, posterior, global_step, "generator")
+                vae_loss, vae_loss_dict = vae_loss_fn(processed_image, recon_image, {"posteriors": posterior}, global_step, "generator")
                 vae_loss = vae_loss.mean()
 
                 # Compute the REPA alignment loss for VAE updates
@@ -414,6 +427,10 @@ def main(args):
                 # **Avoid diffusion loss to backpropagate to the VAE, so we detach the `z`**
                 loss_kwargs["weighting"] = args.weighting
                 loss_kwargs["align_only"] = False
+                # Recompute student_t_nu after optimizer step to avoid inplace-modification error
+                if args.prior_family == "student_t":
+                    unwrapped_loss_fn = accelerator.unwrap_model(vae_loss_fn)
+                    loss_kwargs["student_t_nu"] = torch.nn.functional.softplus(unwrapped_loss_fn.nu_raw) + 1e-4
                 sit_outputs = model(
                     x=z.detach(),
                     y=labels,
@@ -452,6 +469,7 @@ def main(args):
                     "reconstruction_loss": accelerator.gather(vae_loss_dict["reconstruction_loss"].mean()).mean().detach().item(),
                     "perceptual_loss": accelerator.gather(vae_loss_dict["perceptual_loss"].mean()).mean().detach().item(),
                     "kl_loss": accelerator.gather(vae_loss_dict["kl_loss"].mean()).mean().detach().item(),
+                    "nu": loss_kwargs.get("student_t_nu", torch.tensor(0.0)).item(),
                     "weighted_gan_loss": accelerator.gather(vae_loss_dict["weighted_gan_loss"].mean()).mean().detach().item(),
                     "discriminator_factor": accelerator.gather(vae_loss_dict["discriminator_factor"].mean()).mean().detach().item(),
                     "gan_loss": accelerator.gather(vae_loss_dict["gan_loss"].mean()).mean().detach().item(),
@@ -484,6 +502,7 @@ def main(args):
                         "ema": ema.state_dict(),
                         "vae": original_vae.state_dict(),
                         "discriminator": original_discriminator.state_dict(),
+                        "vae_loss_fn": unwrapped_vae_loss_fn.state_dict(),
                         "opt": optimizer.state_dict(),
                         "opt_vae": optimizer_vae.state_dict(),
                         "opt_disc": optimizer_loss_fn.state_dict(),
@@ -541,6 +560,7 @@ def parse_args(input_args=None):
     # logging params
     parser.add_argument("--output-dir", type=str, default="exps")
     parser.add_argument("--exp-name", type=str, required=True)
+    parser.add_argument("--resolution", type=int, default=256, help="Image resolution")
     parser.add_argument("--logging-dir", type=str, default="logs")
     parser.add_argument("--report-to", type=str, default="wandb")
     parser.add_argument("--sampling-steps", type=int, default=10000)
@@ -561,7 +581,9 @@ def parse_args(input_args=None):
 
     # dataset params
     parser.add_argument("--data-dir", type=str, default="data")
-    parser.add_argument("--resolution", type=int, choices=[256], default=256)
+    parser.add_argument("--parquet-data-path", type=str, default=None, help="Path to the Parquet dataset")
+    parser.add_argument("--use-hf-imagenet", action="store_true", help="Use datasets.load_dataset('ILSVRC/imagenet-1k') for training data")
+    parser.add_argument("--hf-cache-dir", type=str, default=None, help="Cache directory for Hugging Face datasets")
     parser.add_argument("--batch-size", type=int, default=256)
 
     # precision params
@@ -608,6 +630,9 @@ def parse_args(input_args=None):
     parser.add_argument("--vae-learning-rate", type=float, default=1e-4)
     parser.add_argument("--disc-learning-rate", type=float, default=1e-4)
     parser.add_argument("--vae-align-proj-coeff", type=float, default=1.5)
+    parser.add_argument("--prior-family", type=str, default="student_t",
+                        choices=["gaussian", "student_t"],
+                        help="Prior distribution family for VAE and SiT")
 
     if input_args is not None:
         args = parser.parse_args(input_args)

@@ -186,6 +186,8 @@ class SiT(nn.Module):
         z_dims=[768],
         projector_dim=2048,
         bn_momentum=0.1,
+        prior_family="gaussian",
+        student_t_df=29.0,
         **block_kwargs # fused_attn
     ):
         super().__init__()
@@ -219,6 +221,9 @@ class SiT(nn.Module):
             in_channels, eps=1e-4, momentum=bn_momentum, affine=False, track_running_stats=True
         )
         self.bn.reset_running_stats()
+
+        self.prior_family = prior_family
+
         self.initialize_weights()
 
     def initialize_weights(self):
@@ -271,6 +276,17 @@ class SiT(nn.Module):
             latents_bias=self.bn.running_mean,
         )
         return latent_stats
+
+    def _sample_student_t_noise(self, template, nu):
+        """Sample noise from multivariate Student-t prior with df=nu.
+        x = z * sqrt(nu / v), where z ~ N(0,I), v ~ Gamma(nu/2, 1/2)
+        """
+        z = torch.randn_like(template, dtype=torch.float32)
+        gamma_dist = torch.distributions.Gamma(nu / 2.0, 0.5)
+        v_shape = [template.shape[0]] + [1] * (len(template.shape) - 1)
+        v = gamma_dist.sample(v_shape).to(device=z.device, dtype=torch.float32)
+        x = z * torch.sqrt(nu / v)
+        return x.to(dtype=template.dtype)
 
     def unpatchify(self, x, patch_size=None):
         """
@@ -335,7 +351,14 @@ class SiT(nn.Module):
 
         # sample noises if not provided
         if noises is None:
-            noises = torch.randn_like(normalized_x)
+            if self.prior_family == "student_t":
+                nu = loss_kwargs.get("student_t_nu", 29.0)
+                # Detach nu for noise sampling to avoid double-backward when
+                # noises are reused across VAE alignment and SiT forward passes.
+                nu_val = nu.detach() if isinstance(nu, torch.Tensor) else nu
+                noises = self._sample_student_t_noise(normalized_x, nu_val)
+            else:
+                noises = torch.randn_like(normalized_x)
         else:
             noises = noises.to(device=normalized_x.device, dtype=normalized_x.dtype)
 
@@ -367,7 +390,15 @@ class SiT(nn.Module):
         x = self.unpatchify(x)                                # (N, out_channels, H, W)
 
         # loss computation
-        denoising_loss = None if loss_kwargs["align_only"] else mean_flat((x - model_target) ** 2)
+        denoising_loss = None
+        if not loss_kwargs["align_only"]:
+            denoising_loss = mean_flat((x - model_target) ** 2)
+            if self.prior_family == "student_t":
+                nu = loss_kwargs.get("student_t_nu", 29.0)
+                d = float(np.prod(noises.shape[1:]))
+                x0_norm_sq = noises.float().square().flatten(1).sum(dim=1)
+                loss_weight = 1.0 / (1.0 + x0_norm_sq / (nu * d))
+                denoising_loss = loss_weight * denoising_loss
 
         proj_loss = torch.tensor(0., device=x.device)
         bsz = zs[0].shape[0]

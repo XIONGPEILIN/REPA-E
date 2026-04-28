@@ -290,9 +290,32 @@ class ReconstructionLoss_Single_Stage(ReconstructionLoss_Stage2):
             self.kl_weight = loss_config.get("kl_weight", 1e-6)
             logvar_init = loss_config.get("logvar_init", 0.0)
             self.logvar = nn.Parameter(torch.ones(size=()) * logvar_init, requires_grad=False)
+            self.nu_raw = nn.Parameter(torch.tensor(29.0))
 
         # coefficient for the projection alignment loss
         self.proj_coef = loss_config.get("proj_coef", 0.0)
+
+    def _compute_student_t_kl(self, posteriors):
+        # 1. 全局自适应自由度参数定义 (将初始化为 29.0)
+        nu = torch.nn.functional.softplus(self.nu_raw) + 1e-4 
+        d = posteriors.mean.shape[1] * posteriors.mean.shape[2] * posteriors.mean.shape[3] # 潜空间总维度 (如 4096)
+        
+        # Sample z for MC estimate of the KL divergence
+        z = posteriors.sample()
+
+        # 2. 负高斯熵 (variable part)
+        entropy_term = -0.5 * posteriors.logvar.float().flatten(1).sum(dim=1)
+        
+        # 3. 多变量 Student-t 惩罚 (基于 ||z||^2 保证球面对称)
+        z_norm_sq = z.float().square().flatten(1).sum(dim=1)
+        prior_penalty = ((nu + d) / 2.0) * torch.log(1.0 + z_norm_sq / nu)
+        
+        # 4. 配分常数项 (为了计算 nu 的梯度)
+        log_gamma_term = - torch.lgamma((nu + d) / 2.0) + torch.lgamma(nu / 2.0) + (d / 2.0) * torch.log(nu)
+        
+        # 结合 REPA-E 的低权重缩放 (beta)
+        kl_loss = (entropy_term + prior_penalty + log_gamma_term).mean()
+        return kl_loss
 
     def _forward_generator(self,
                            inputs: torch.Tensor,
@@ -351,9 +374,8 @@ class ReconstructionLoss_Single_Stage(ReconstructionLoss_Stage2):
         elif self.quantize_mode == "vae":
             # Compute kl loss.
             reconstruction_loss = reconstruction_loss / torch.exp(self.logvar)
-            posteriors = extra_result_dict
-            kl_loss = posteriors.kl()
-            kl_loss = torch.sum(kl_loss) / kl_loss.shape[0]
+            posteriors = extra_result_dict["posteriors"]
+            kl_loss = self._compute_student_t_kl(posteriors)
             total_loss = (
                 reconstruction_loss
                 + self.perceptual_weight * perceptual_loss
@@ -449,8 +471,7 @@ class ReconstructionLoss_Single_Stage(ReconstructionLoss_Stage2):
             reconstruction_loss = reconstruction_loss / torch.exp(self.logvar)
             # NOTE: because we need other inputs, so we put posteriors as one element in extra_result_dict
             posteriors = extra_result_dict["posteriors"]
-            kl_loss = posteriors.kl()
-            kl_loss = torch.sum(kl_loss) / kl_loss.shape[0]
+            kl_loss = self._compute_student_t_kl(posteriors)
             total_loss = (
                 reconstruction_loss
                 + self.perceptual_weight * perceptual_loss
