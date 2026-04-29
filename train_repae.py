@@ -289,7 +289,7 @@ def main(args):
         ckpt_path = f'{args.continue_train_exp_dir}/checkpoints/{ckpt_name}'
 
         # If the checkpoint exists, we load the checkpoint and resume the training
-        ckpt = torch.load(ckpt_path, map_location='cpu')
+        ckpt = torch.load(ckpt_path, map_location='cpu', weights_only=False)
         model.load_state_dict(ckpt['model'])
         ema.load_state_dict(ckpt['ema'])
         vae.load_state_dict(ckpt['vae'])
