@@ -37,5 +37,5 @@ accelerate launch \
     --exp-name="sit-xl-dinov2-b-repae" \
     --compile \
     --compile-mode="max-autotune-no-cudagraphs" \
-    --resume-step=60000 \
-    --continue-train-exp-dir="outputs/sit-xl-dinov2-b-repae"
+    --resume-step=0 \
+    --continue-train-exp-dir="outputs/sit-xl-dinov2-b-repae-student"

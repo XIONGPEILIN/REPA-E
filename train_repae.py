@@ -295,7 +295,12 @@ def main(args):
         vae.load_state_dict(ckpt['vae'])
         vae_loss_fn.discriminator.load_state_dict(ckpt['discriminator'])
         if 'vae_loss_fn' in ckpt:
-            vae_loss_fn.load_state_dict(ckpt['vae_loss_fn'], strict=False)
+            # Handle possible prefix mismatch when model was compiled
+            vae_loss_state = ckpt['vae_loss_fn']
+            if not getattr(vae_loss_fn, '_is_compiled', False):
+                # Clean up _orig_mod. prefix if checkpoint was saved from a compiled model
+                vae_loss_state = {k.replace('_orig_mod.', ''): v for k, v in vae_loss_state.items()}
+            vae_loss_fn.load_state_dict(vae_loss_state, strict=False)
         optimizer.load_state_dict(ckpt['opt']),
         optimizer_vae.load_state_dict(ckpt['opt_vae'])
         optimizer_loss_fn.load_state_dict(ckpt['opt_disc'])
