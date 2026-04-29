@@ -1,0 +1,26 @@
+#!/bin/bash
+export WANDB_DIR="/export/ssd2/xiong-p/wandb_repae"
+
+export CUDA_VISIBLE_DEVICES=4,5,6,7
+
+accelerate launch \
+  --mixed_precision=bf16 \
+  --num_processes=4 \
+  train_repae.py \
+  --resolution 256 \
+  --max-train-steps 400000 \
+  --checkpointing-steps 10000 \
+  --use-hf-imagenet \
+  --output-dir exps \
+  --exp-name sit-xl-dinov2-b-repae \
+  --allow-tf32 \
+  --mixed-precision bf16 \
+  --loss-cfg-path configs/l1_lpips_kl_gan.yaml \
+  --vae f8d4 \
+  --vae-ckpt pretrained/sdvae/sdvae-f8d4.pt \
+  --disc-pretrained-ckpt pretrained/sdvae/sdvae-f8d4-discriminator-ckpt.pt \
+  --enc-type dinov2-vit-b \
+  --proj-coeff 0.5 \
+  --encoder-depth 8 \
+  --prior-family student_t \
+  --batch-size 256

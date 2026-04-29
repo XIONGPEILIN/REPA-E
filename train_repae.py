@@ -286,7 +286,7 @@ def main(args):
     global_step = 0
     if args.resume_step > 0:
         ckpt_name = str(args.resume_step).zfill(7) +'.pt'
-        ckpt_path = f'{args.cont_dir}/checkpoints/{ckpt_name}'
+        ckpt_path = f'{args.continue_train_exp_dir}/checkpoints/{ckpt_name}'
 
         # If the checkpoint exists, we load the checkpoint and resume the training
         ckpt = torch.load(ckpt_path, map_location='cpu')
@@ -306,9 +306,10 @@ def main(args):
     torch._dynamo.config.accumulated_cache_size_limit = 512
     # Model compilation for better performance
     if args.compile:
-        model = torch.compile(model, backend="inductor", mode="default")
-        vae = torch.compile(vae, backend="inductor", mode="default")
-        vae_loss_fn = torch.compile(vae_loss_fn, backend="inductor", mode="default")
+        model = torch.compile(model, backend="inductor", mode=args.compile_mode)
+        vae = torch.compile(vae, backend="inductor", mode=args.compile_mode)
+        vae_loss_fn = torch.compile(vae_loss_fn, backend="inductor", mode=args.compile_mode)
+        encoders = [torch.compile(enc, backend="inductor", mode=args.compile_mode) for enc in encoders]
 
     model, vae, vae_loss_fn, optimizer, optimizer_vae, optimizer_loss_fn, train_dataloader = accelerator.prepare(
         model, vae, vae_loss_fn, optimizer, optimizer_vae, optimizer_loss_fn, train_dataloader
@@ -376,7 +377,7 @@ def main(args):
                 )
                 if args.prior_family == "student_t":
                     unwrapped_loss_fn = accelerator.unwrap_model(vae_loss_fn)
-                    loss_kwargs["student_t_nu"] = torch.nn.functional.softplus(unwrapped_loss_fn.nu_raw) + 1e-4
+                    loss_kwargs["student_t_nu"] = (torch.nn.functional.softplus(unwrapped_loss_fn.nu_raw) + 1e-4).detach()
                 # Record the time_input and noises for the VAE alignment, so that we avoid sampling again
                 time_input = None
                 noises = None
@@ -430,7 +431,7 @@ def main(args):
                 # Recompute student_t_nu after optimizer step to avoid inplace-modification error
                 if args.prior_family == "student_t":
                     unwrapped_loss_fn = accelerator.unwrap_model(vae_loss_fn)
-                    loss_kwargs["student_t_nu"] = torch.nn.functional.softplus(unwrapped_loss_fn.nu_raw) + 1e-4
+                    loss_kwargs["student_t_nu"] = (torch.nn.functional.softplus(unwrapped_loss_fn.nu_raw) + 1e-4).detach()
                 sit_outputs = model(
                     x=z.detach(),
                     y=labels,
@@ -578,6 +579,8 @@ def parse_args(input_args=None):
     parser.add_argument("--bn-momentum", type=float, default=0.1)
     parser.add_argument("--compile", action=argparse.BooleanOptionalAction, default=True,
                         help="Whether to compile the model for faster training")
+    parser.add_argument("--compile-mode", type=str, default="default",
+                        help="Mode for torch.compile (e.g. max-autotune-no-cudagraphs)")
 
     # dataset params
     parser.add_argument("--data-dir", type=str, default="data")

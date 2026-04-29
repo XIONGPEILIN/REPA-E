@@ -181,10 +181,12 @@ samples/
 samples2/
 wandb/
 evals/
-*.sh
 *.err
 *.out
 *.log
 classify_image_graph_def.pb
 requirements.txt
 evaluate256.py
+arxiv_2504.10483v3/
+.codex
+arXiv-2504.10483v3.tar.gz

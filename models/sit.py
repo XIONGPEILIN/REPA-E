@@ -395,6 +395,8 @@ class SiT(nn.Module):
             denoising_loss = mean_flat((x - model_target) ** 2)
             if self.prior_family == "student_t":
                 nu = loss_kwargs.get("student_t_nu", 29.0)
+                if isinstance(nu, torch.Tensor):
+                    nu = nu.detach()
                 d = float(np.prod(noises.shape[1:]))
                 x0_norm_sq = noises.float().square().flatten(1).sum(dim=1)
                 loss_weight = 1.0 / (1.0 + x0_norm_sq / (nu * d))
